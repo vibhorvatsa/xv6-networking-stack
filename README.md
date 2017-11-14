@@ -1,5 +1,6 @@
 # xv6-networking-stack
-A limited network stack implementation for xv6 OS.
+The main goal of this project is to Implement Networking Stack on xv6 till Ethernet Layer.
+Networking is an important part of any OS implementation and our idea was to augment the current xv6 implementation with Networking Stack. Using the default E1000/N2K_PCI networking driver model (virtual driver provided by QEMU), we will build driver code and system calls to expose networking stack . We will showcase the output of this project, through an execution of ARP (Address Resolution Protocol) , which is basically a data frame over raw Ethernet Frame. More details are listed below. 
 
 ## High Level Tasks
 - **QEMU Virtual Network Devices:** Either the E1000 default adapter provided by QEMU or the N2000 PCI network adapter.
