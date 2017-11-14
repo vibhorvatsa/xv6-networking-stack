@@ -14,6 +14,7 @@ Networking is an important part of any OS implementation and our idea was to aug
 # Team Members:
 - Pradeep Kumar Beri (u1077774)
 - Anmol Vatsa (u1082186)
+- Vinod Reddy (u1142935)
 
 # References:
 - https://pdos.csail.mit.edu/6.828/2017/labs/lab6/
