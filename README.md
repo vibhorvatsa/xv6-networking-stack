@@ -10,3 +10,11 @@ Networking is an important part of any OS implementation and our idea was to aug
 	- **MAC Layer:** Create and parse Ethernet frames.
 	- **ARP Protocol:** Create and parse ARP packets.
 - **ARP system call and client:** Expose the create_arp() call as a system call to test ARP through a user space client application.
+
+# Team Members:
+- Pradeep Kumar Beri <u1077774>
+- Anmol Vatsa <u1082186>
+
+# References:
+- https://pdos.csail.mit.edu/6.828/2017/labs/lab6/
+- https://www.cs.unh.edu/cnrg/people/gherrin/linux-net.html
