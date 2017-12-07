@@ -2,6 +2,8 @@
 #include "x86.h"
 #include "defs.h"
 #include "pciregisters.h"
+#include "e1000.h"
+#include "nic.h"
 
 static const char *pci_class[] = {"Unclassified device", "Mass storage controller", "Network controller", "Display controller", "Multimedia device", "Memory controller", "Bridge device"};
 
@@ -39,7 +41,9 @@ static uint32_t pci_conf_read(struct pci_func *f, uint32_t off) {
 }
 
 static int e1000_attach(struct pci_func *pcif) {
-
+	e1000_init();
+	struct nic_driver nd = {e1000_send, e1000_recv};
+	register_driver(nd);
   return 0;
 }
 

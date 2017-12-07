@@ -3,6 +3,7 @@ OBJS = \
 	arp_frame.o\
 	bio.o\
 	console.o\
+	e1000.o\
 	exec.o\
 	file.o\
 	fs.o\
@@ -14,6 +15,7 @@ OBJS = \
 	log.o\
 	main.o\
 	mp.o\
+	nic.o\
 	picirq.o\
 	pci.o\
 	pipe.o\
