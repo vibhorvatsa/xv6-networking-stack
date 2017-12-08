@@ -40,7 +40,79 @@ static uint32_t pci_conf_read(struct pci_func *f, uint32_t off) {
 	return inl(PCI_CONFIG_DATA_IOPORT);
 }
 
+static void pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v) {
+	uint32_t address = pci_config_format_addr(f->bus->busno, f->dev, f->func, off);
+	outl(PCI_CONFIG_ADDRESS_IOPORT, address);
+
+	outl(PCI_CONFIG_DATA_IOPORT, v);
+}
+
+void pci_enable_device(struct pci_func *f) {
+	/**
+	 *TODO: enable the PCI device by setting its registers
+	 *			requires configuring the device either for Memory-mapped I/O
+	 				or normal port I/O.
+	 */
+	pci_conf_write(f, PCI_COMMAND_STATUS_REG,
+		       PCI_COMMAND_IO_ENABLE |
+		       PCI_COMMAND_MEM_ENABLE |
+		       PCI_COMMAND_MASTER_ENABLE);
+
+	uint32_t bar_width;
+	uint32_t bar;
+	for (bar = PCI_MAPREG_START; bar < PCI_MAPREG_END; bar += bar_width) {
+		uint32_t oldv = pci_conf_read(f, bar);
+
+		bar_width = 4;
+
+		/**
+		 * To determine the amount of address space needed by a PCI device,
+		 * you must save the original value of the BAR, write a value of all 1's
+		 * to the register, then read it back. The amount of memory can then be
+		 * determined by masking the information bits, performing a
+		 * bitwise NOT ('~' in C), and incrementing the value by 1.
+		 *
+		 * http://wiki.osdev.org/PCI
+		 */
+		pci_conf_write(f, bar, 0xffffffff);
+		uint32_t rv = pci_conf_read(f, bar);
+
+		if (rv == 0)
+			continue;
+
+		int regnum = PCI_MAPREG_NUM(bar);
+		uint32_t base, size;
+		if (PCI_MAPREG_TYPE(rv) == PCI_MAPREG_TYPE_MEM) {
+			if (PCI_MAPREG_MEM_TYPE(rv) == PCI_MAPREG_MEM_TYPE_64BIT)
+				bar_width = 8;
+
+			size = PCI_MAPREG_MEM_SIZE(rv);
+			base = PCI_MAPREG_MEM_ADDR(oldv);
+			cprintf("mem region %d: %d bytes at 0x%x\n",
+					regnum, size, base);
+		} else {
+			size = PCI_MAPREG_IO_SIZE(rv);
+			base = PCI_MAPREG_IO_ADDR(oldv);
+			cprintf("io region %d: %d bytes at 0x%x\n",
+					regnum, size, base);
+		}
+
+		pci_conf_write(f, bar, oldv);
+		f->reg_base[regnum] = base;
+		f->reg_size[regnum] = size;
+
+		if (size && !base)
+			cprintf("PCI device %x:%x.%d (%x:%x) "
+				"may be misconfigured: "
+				"region %d: base 0x%x, size %d\n",
+				f->bus->busno, f->dev, f->func,
+				PCI_VENDOR(f->dev_id), PCI_PRODUCT(f->dev_id),
+				regnum, base, size);
+	}
+}
+
 static int e1000_attach(struct pci_func *pcif) {
+	pci_enable_device(pcif);
 	e1000_init();
 	struct nic_driver nd = {e1000_send, e1000_recv};
 	register_driver(nd);
