@@ -113,7 +113,7 @@ void pci_enable_device(struct pci_func *f) {
 
 static int e1000_attach(struct pci_func *pcif) {
 	pci_enable_device(pcif);
-	e1000_init();
+	e1000_init(pcif);
 	struct nic_driver nd = {e1000_send, e1000_recv};
 	register_driver(nd);
   return 0;
