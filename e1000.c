@@ -1,3 +1,13 @@
+/**
+ * author: Anmol Vatsa<anvatsa@cs.utah.edu>
+ *
+ * Patterned after https://github.com/wh5a/jos/blob/master/kern/e100.c
+ * The network device is different from what we use. device e1000 from
+ * qemu(what we use) gives product id =0x100e = 82540EM Gigabit Ethernet
+ * Controller but the referenced code uses 0x1209 = 8255xER/82551IT Fast
+ * Ethernet Controller which is device i82550 in qemu
+ */
+
 #include "e1000.h"
 #include "defs.h"
 #include "x86.h"
@@ -13,7 +23,7 @@
 /**
  * Ethernet Device Control Register values
  */
-#define E1000_CNTRL_REG     0x00000
+#define E1000_CNTRL_REG           0x00000
 
 #define E1000_CNTRL_LRST_MASK     0x00000004
 #define E1000_CNTRL_RST_MASK      0x02000000
@@ -69,7 +79,7 @@ static uint32_t e1000_reg_read(uint32_t reg_addr) {
 }
 
 // Each inb of port 0x84 takes about 1.25us
-//Super stupid delay logic. Don't even know if this works
+// Super stupid delay logic. Don't even know if this works
 // or understand what port 0x84 does.
 // Could not find an explanantion.
 static void udelay(unsigned int u)
@@ -102,14 +112,15 @@ int e1000_init(struct pci_func *pcif) {
     udelay(1);
   }while(E1000_CNTRL_RST_BIT(e1000_reg_read(E1000_CNTRL_REG)));
 
-  //Must set the ASDE and SLU(bit 5 and 6) in the CNRTL Reg to allow auto speed detection
-  //Or so the document says in Section 14.3 General Config. JOS code did not do it, but I think the network device is
-  // different from what we use. device e1000 from qemu(what we use) gives product id =0x100e
-  // but JOS uses 0x1209 which is 8255xER/82551IT Fast Ethernet Controller
+  //the manual says in Section 14.3 General Config -
+  //Must set the ASDE and SLU(bit 5 and 6) in the CNTRL Reg to allow auto speed
+  //detection after RESET
   e1000_reg_write(E1000_CNTRL_REG, E1000_CNTRL_ASDE_MASK);
   e1000_reg_write(E1000_CNTRL_REG, E1000_CNTRL_SLU_MASK);
 
   //Transmit/Receive and DMA config beyond this point...
+
+  //Register interrupt handler here...
 
   return 0;
 }

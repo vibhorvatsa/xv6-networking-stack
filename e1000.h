@@ -3,7 +3,8 @@
 /**
  *author: Anmol Vatsa<anvatsa@cs.utah.edu>
  *
- *device driver for the E1000 emulated NIC
+ *device driver for the E1000 emulated NIC on an x86 core
+ *https://pdos.csail.mit.edu/6.828/2017/readings/hardware/8254x_GBe_SDM.pdf
  */
 #include "types.h"
 #include "nic.h"
