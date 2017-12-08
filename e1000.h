@@ -7,6 +7,7 @@
  */
 #include "types.h"
 #include "nic.h"
+#include "pci.h"
 
 struct send_descriptor {
 
@@ -16,7 +17,7 @@ struct recv_descriptor {
 
 };
 
-int e1000_init();
+int e1000_init(struct pci_func *pcif);
 
 int e1000_send(struct ethr_hdr);
 int e1000_recv(struct ethr_hdr);
