@@ -121,11 +121,10 @@ void unpack_mac(uchar* mac, char* mac_str) {
     int c = 0;
 
     for (int i = 0; i < 6; i++) {
-        uint v = 15;
         uint m = mac[i];
 
-        uint i2 = m && v;
-        uint i1 = m && (v << 15);
+        uint i2 = m & 0x0f;
+        uint i1 = m & 0xf0;
 
         mac_str[c++] = int_to_hex(i1);
         mac_str[c++] = int_to_hex(i2);

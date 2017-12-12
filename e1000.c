@@ -2,7 +2,7 @@
  * author: Anmol Vatsa<anvatsa@cs.utah.edu>
  *
  * Patterned after https://github.com/wh5a/jos/blob/master/kern/e100.c
- * The network device is different from what we use. device e1000 from
+ * The network device is different from what is used here. device e1000 from
  * qemu(what we use) gives product id =0x100e = 82540EM Gigabit Ethernet
  * Controller but the referenced code uses 0x1209 = 8255xER/82551IT Fast
  * Ethernet Controller which is device i82550 in qemu
@@ -27,7 +27,7 @@
 #define E1000_CNTRL_REG           0x00000
 
 //Global device reset. does not clear PCI config
-#define E1000_CNTRL_RST_MASK      0x02000000
+#define E1000_CNTRL_RST_MASK      0x04000000
 #define E1000_CNTRL_ASDE_MASK     0x00000020
 #define E1000_CNTRL_SLU_MASK      0x00000040
 
@@ -50,13 +50,14 @@
 #define E1000_EERD_ADDR_BIT_MASK    0x0000ff00
 #define E1000_EERD_ADDR_BIT_SHIFT   8
 #define E1000_EERD_DATA_BIT_MASK    0xffff0000
+#define E1000_EERD_DATA_BIT_SHIFT   16
 #define E1000_EERD_DONE_BIT_MASK    0x00000010
 
 #define E1000_EERD_ADDR(addr) \
         ((addr << E1000_EERD_ADDR_BIT_SHIFT) & E1000_EERD_ADDR_BIT_MASK)
 
 #define E1000_EERD_DATA(eerd) \
-        (eerd & E1000_EERD_DATA_BIT_MASK)
+        (eerd >> E1000_EERD_DATA_BIT_SHIFT)
 
 #define E1000_EERD_DONE(eerd) \
         (eerd & E1000_EERD_DONE_BIT_MASK)
@@ -108,26 +109,16 @@ static struct {
 } the_e1000;
 
 static void e1000_reg_write(uint32_t reg_addr, uint32_t value) {
-  cprintf("Writing value 0x%x to E1000 I/O port 0x%x\n", value, reg_addr);
-  //First write the reg_addr you want to write the data to, into IOADDR
-  outl(the_e1000.iobase + E1000_IOADDR_OFFSET, reg_addr);
-cprintf("Written address 0x%x to E1000_IOADDR=0x%x\n", inl(the_e1000.iobase + E1000_IOADDR_OFFSET), the_e1000.iobase + E1000_IOADDR_OFFSET);
-  //Then write the value in to IODATA
-  outl(the_e1000.iobase + E1000_IODATA_OFFSET, value);
-  cprintf("Written value 0x%x to reg=0x%x\n", inl(the_e1000.iobase + E1000_IODATA_OFFSET), reg_addr);
+  *(uint32_t*)(the_e1000.membase + reg_addr) = value;
 }
 
 static uint32_t e1000_reg_read(uint32_t reg_addr) {
-  //First write the reg_addr you want to read the data from, into IOADDR
-  outl(the_e1000.iobase + E1000_IOADDR_OFFSET, reg_addr);
-
-  //Then read the value in from IODATA
-  uint32_t value = inl(the_e1000.iobase + E1000_IODATA_OFFSET);
-  cprintf("Read value 0x%x from E1000 I/O port 0x%x\n", value, reg_addr);
+  uint32_t value = *(uint32_t*)(the_e1000.membase + reg_addr);
+  //cprintf("Read value 0x%x from E1000 I/O port 0x%x\n", value, reg_addr);
 
   return value;
 }
-/*
+
 // Each inb of port 0x84 takes about 1.25us
 // Super stupid delay logic. Don't even know if this works
 // or understand what port 0x84 does.
@@ -137,7 +128,7 @@ static void udelay(unsigned int u)
 	unsigned int i;
 	for (i = 0; i < u; i++)
 		inb(0x84);
-}*/
+}
 
 int e1000_init(struct pci_func *pcif) {
   //check the last nibble of the transmit/receive rings to make sure they
@@ -169,58 +160,38 @@ int e1000_init(struct pci_func *pcif) {
   }
   if (!the_e1000.iobase)
     panic("Fail to find a valid I/O port base for E1000.");
+    if (!the_e1000.membase)
+      panic("Fail to find a valid Mem I/O base for E1000.");
 
 	the_e1000.irq_line = pcif->irq_line;
-/*
+
   // Reset device but keep the PCI config
-  e1000_reg_write(E1000_CNTRL_REG, E1000_CNTRL_RST_MASK);
+  e1000_reg_write(E1000_CNTRL_REG, e1000_reg_read(E1000_CNTRL_REG) | E1000_CNTRL_RST_MASK);
   //read back the value after approx 1us to check RST bit cleared
   do {
-    udelay(1);
+    udelay(3);
   }while(E1000_CNTRL_RST_BIT(e1000_reg_read(E1000_CNTRL_REG)));
-*/
+
   //the manual says in Section 14.3 General Config -
-  //Must set the ASDE and SLU(bit 5 and 6) in the CNTRL Reg to allow auto speed
+  //Must set the ASDE and SLU(bit 5 and 6(0 based index)) in the CNTRL Reg to allow auto speed
   //detection after RESET
   uint32_t cntrl_reg = e1000_reg_read(E1000_CNTRL_REG);
   e1000_reg_write(E1000_CNTRL_REG, cntrl_reg | E1000_CNTRL_ASDE_MASK | E1000_CNTRL_SLU_MASK);
 
-  //Read Hardware(MAC) address from the device EEPROM's first 3 words
-//  uint16_t macddr_1, macddr_2, macddr_3;
-  e1000_reg_write(E1000_EERD_REG_ADDR,
-    E1000_EERD_ADDR(EEPROM_ADDR_MAP_ETHER_ADDR_1) | E1000_EERD_START_BIT_MASK);
-
-    
-/*  //Read the DONE Bit until it reads 1b to ensure DATA available
-  do {
-    macddr_1 = e1000_reg_read(E1000_EERD_REG_ADDR);
-  }while(!E1000_EERD_DONE(macddr_1));
-  macddr_1 = E1000_EERD_DATA(macddr_1);
-  cprintf("MAC Address of e1000 device from EEPROM word 3:%x\n", macddr_1);
-  e1000_reg_write(E1000_EERD_REG_ADDR,
-    E1000_EERD_ADDR(EEPROM_ADDR_MAP_ETHER_ADDR_2) | E1000_EERD_START_BIT_MASK);
-  do {
-    macddr_2 = e1000_reg_read(E1000_EERD_REG_ADDR);
-  }while(!E1000_EERD_DONE(macddr_2));
-  macddr_2 = E1000_EERD_DATA(macddr_2);
-
-  e1000_reg_write(E1000_EERD_REG_ADDR,
-    E1000_EERD_ADDR(EEPROM_ADDR_MAP_ETHER_ADDR_3) | E1000_EERD_START_BIT_MASK);
-  do {
-    macddr_3 = e1000_reg_read(E1000_EERD_REG_ADDR);
-  }while(!E1000_EERD_DONE(macddr_3));
-  macddr_3 = E1000_EERD_DATA(macddr_3);
-  cprintf("MAC Address of e1000 device from EEPROM word 3:%x\n", macddr_3);
+  //Read Hardware(MAC) address from the device
   uint32_t macaddr_l = e1000_reg_read(E1000_RCV_RAL0);
   uint32_t macaddr_h = e1000_reg_read(E1000_RCV_RAH0);
-  cprintf("MAC Address of e1000 device:%x\n", (macaddr_l | (macaddr_h & 0xff)));
-  *the_e1000.mac_addr = macaddr_l | (macaddr_h & 0xff);
+  for(int i=0,j=1;i<2;i++,j--)
+    *(&the_e1000.mac_addr[i]) = (macaddr_h >> (8*j));
+  for(int i=0,j=3;i<4;i++,j--)
+    *(&the_e1000.mac_addr[i+2]) = (macaddr_l >> (8*j));
   char mac_str[18];
   unpack_mac(the_e1000.mac_addr, mac_str);
   mac_str[17] = 0;
   cprintf("MAC string of e1000 device:%s\n", mac_str);
+
   //Transmit/Receive and DMA config beyond this point...
-*/
+
   //Register interrupt handler here...
 
   return 0;
