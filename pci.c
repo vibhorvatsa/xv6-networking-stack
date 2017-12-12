@@ -48,11 +48,7 @@ static void pci_conf_write(struct pci_func *f, uint32_t off, uint32_t v) {
 }
 
 void pci_enable_device(struct pci_func *f) {
-	/**
-	 *TODO: enable the PCI device by setting its registers
-	 *			requires configuring the device either for Memory-mapped I/O
-	 				or normal port I/O.
-	 */
+
 	pci_conf_write(f, PCI_COMMAND_STATUS_REG,
 		       PCI_COMMAND_IO_ENABLE |
 		       PCI_COMMAND_MEM_ENABLE |
