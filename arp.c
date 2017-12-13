@@ -24,9 +24,9 @@ int send_arpRequest(char* interface, char* ipAddr, char* arpResp) {
   struct ethr_hdr eth;
   create_eth_arp_frame(ipAddr, &eth);
 
-  struct nic_driver *nd;
-  if(get_device_driver(interface, &nd) < 0) {
-    cprintf("ERROR:send_arpRequest:Device driver not loaded\n");
+  struct nic_device *nd;
+  if(get_device(interface, &nd) < 0) {
+    cprintf("ERROR:send_arpRequest:Device not loaded\n");
     return -1;
   }
 

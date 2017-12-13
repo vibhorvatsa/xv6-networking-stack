@@ -31,5 +31,6 @@ struct ethr_hdr {
 
 int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth);
 void unpack_mac(uchar* mac, char* mac_str);
+char int_to_hex (uint n);
 
 #endif

@@ -10,16 +10,17 @@
 #include "arp_frame.h"
 
 //Generic NIC device driver container
-struct nic_driver {
+struct nic_device {
+  
   int (*send_packet) (struct ethr_hdr packet);
   int (*recv_packet) (struct ethr_hdr packet);
 };
 
-//Holds the instances of nic_driver for loaded drivers
-//Lets say for now there can't be more than 1 loaded NIC driver
-struct nic_driver nic_drivers[1];
+//Holds the instances of nic_devices for loaded devices
+//Lets say for now there can't be more than 1 loaded NIC device
+struct nic_device nic_devices[1];
 
-void register_driver(struct nic_driver nd);
-int get_device_driver(char* interface, struct nic_driver** nd);
+void register_device(struct nic_device nd);
+int get_device(char* interface, struct nic_device** nd);
 
 #endif

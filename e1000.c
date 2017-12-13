@@ -12,9 +12,11 @@
 #include "defs.h"
 #include "x86.h"
 #include "arp_frame.h"
+#include "nic.h"
+#include "memlayout.h"
 
-#define E1000_RBD_SLOTS			64
-#define E1000_TBD_SLOTS			64
+#define E1000_RBD_SLOTS			32
+#define E1000_TBD_SLOTS			32
 
 //Bit 31:20 are not writable. Always read 0b.
 #define E1000_IOADDR_OFFSET 0x00000000
@@ -71,7 +73,7 @@
 
 //Trasmit Buffer Descriptor
 // The Transmit Descriptor Queue must be aligned on 16-byte boundary
-__attribute__ ((aligned (16)))
+//__attribute__ ((aligned (16)))
 struct e1000_tbd {
   uint32_t addr_l;
   uint32_t addr_h;
@@ -85,14 +87,27 @@ struct e1000_tbd {
 
 //Receive Buffer Descriptor
 // The Receive Descriptor Queue must be aligned on 16-byte boundary
-__attribute__ ((aligned (16)))
+//__attribute__ ((aligned (16)))
 struct e1000_rbd {
-
+  uint32_t addr_l;
+  uint32_t addr_h;
+	uint16_t	length;
+	uint16_t	checksum;
+	uint8_t	status;
+	uint8_t	errors;
+	uint16_t	special;
 };
 
-static struct {
-	struct e1000_tbd tbd[E1000_TBD_SLOTS];
-	struct e1000_rbd rbd[E1000_RBD_SLOTS];
+struct packet_buf {
+    uint8_t buf[2046];
+};
+
+struct e1000 {
+	struct e1000_tbd *tbd[E1000_TBD_SLOTS];
+	struct e1000_rbd *rbd[E1000_RBD_SLOTS];
+
+  struct packet_buf *tx_buf[E1000_TBD_SLOTS];  //packet buffer space for tbd
+  struct packet_buf *rx_buf[E1000_RBD_SLOTS];  //packet buffer space for rbd
 
   int tbd_head;
 	int tbd_tail;
@@ -106,14 +121,14 @@ static struct {
   uint32_t membase;
   uint8_t irq_line;
   uint8_t mac_addr[6];
-} the_e1000;
+};
 
-static void e1000_reg_write(uint32_t reg_addr, uint32_t value) {
-  *(uint32_t*)(the_e1000.membase + reg_addr) = value;
+static void e1000_reg_write(uint32_t reg_addr, uint32_t value, struct e1000 *the_e1000) {
+  *(uint32_t*)(the_e1000->membase + reg_addr) = value;
 }
 
-static uint32_t e1000_reg_read(uint32_t reg_addr) {
-  uint32_t value = *(uint32_t*)(the_e1000.membase + reg_addr);
+static uint32_t e1000_reg_read(uint32_t reg_addr, struct e1000 *the_e1000) {
+  uint32_t value = *(uint32_t*)(the_e1000->membase + reg_addr);
   //cprintf("Read value 0x%x from E1000 I/O port 0x%x\n", value, reg_addr);
 
   return value;
@@ -131,66 +146,94 @@ static void udelay(unsigned int u)
 }
 
 int e1000_init(struct pci_func *pcif) {
-  //check the last nibble of the transmit/receive rings to make sure they
-  //are on paragraph boundary
-  // TODO: Shouldn't this check be on Physical addresses???
-  if((((uint32_t)the_e1000.tbd) & 0x0000000f) != 0){
-    cprintf("ERROR:e1000:Transmit Descriptor Ring not on paragraph boundary\n");
-    return -1;
-  }
-  if((((uint32_t)the_e1000.rbd) & 0x0000000f) != 0){
-    cprintf("ERROR:e1000:Receive Descriptor Ring not on paragraph boundary\n");
-    return -1;
-  }
+  struct e1000 *the_e1000 = (struct e1000*)kalloc();
 
 	for (int i = 0; i < 6; i++) {
     // I/O port numbers are 16 bits, so they should be between 0 and 0xffff.
     if (pcif->reg_base[i] <= 0xffff) {
-      the_e1000.iobase = pcif->reg_base[i];
+      the_e1000->iobase = pcif->reg_base[i];
       if(pcif->reg_size[i] != 64) {  // CSR is 64-byte
         panic("I/O space BAR size != 64");
       }
       break;
     } else if (pcif->reg_base[i] > 0) {
-      the_e1000.membase = pcif->reg_base[i];
+      the_e1000->membase = pcif->reg_base[i];
       if(pcif->reg_size[i] != (1<<17)) {  // CSR is 64-byte
         panic("Mem space BAR size != 128KB");
       }
     }
   }
-  if (!the_e1000.iobase)
+  if (!the_e1000->iobase)
     panic("Fail to find a valid I/O port base for E1000.");
-    if (!the_e1000.membase)
+    if (!the_e1000->membase)
       panic("Fail to find a valid Mem I/O base for E1000.");
 
-	the_e1000.irq_line = pcif->irq_line;
+	the_e1000->irq_line = pcif->irq_line;
 
   // Reset device but keep the PCI config
-  e1000_reg_write(E1000_CNTRL_REG, e1000_reg_read(E1000_CNTRL_REG) | E1000_CNTRL_RST_MASK);
+  e1000_reg_write(E1000_CNTRL_REG,
+    e1000_reg_read(E1000_CNTRL_REG, the_e1000) | E1000_CNTRL_RST_MASK,
+    the_e1000);
   //read back the value after approx 1us to check RST bit cleared
   do {
     udelay(3);
-  }while(E1000_CNTRL_RST_BIT(e1000_reg_read(E1000_CNTRL_REG)));
+  }while(E1000_CNTRL_RST_BIT(e1000_reg_read(E1000_CNTRL_REG, the_e1000)));
 
   //the manual says in Section 14.3 General Config -
   //Must set the ASDE and SLU(bit 5 and 6(0 based index)) in the CNTRL Reg to allow auto speed
   //detection after RESET
-  uint32_t cntrl_reg = e1000_reg_read(E1000_CNTRL_REG);
-  e1000_reg_write(E1000_CNTRL_REG, cntrl_reg | E1000_CNTRL_ASDE_MASK | E1000_CNTRL_SLU_MASK);
+  uint32_t cntrl_reg = e1000_reg_read(E1000_CNTRL_REG, the_e1000);
+  e1000_reg_write(E1000_CNTRL_REG, cntrl_reg | E1000_CNTRL_ASDE_MASK | E1000_CNTRL_SLU_MASK,
+    the_e1000);
 
   //Read Hardware(MAC) address from the device
-  uint32_t macaddr_l = e1000_reg_read(E1000_RCV_RAL0);
-  uint32_t macaddr_h = e1000_reg_read(E1000_RCV_RAH0);
+  uint32_t macaddr_l = e1000_reg_read(E1000_RCV_RAL0, the_e1000);
+  uint32_t macaddr_h = e1000_reg_read(E1000_RCV_RAH0, the_e1000);
   for(int i=0,j=1;i<2;i++,j--)
-    *(&the_e1000.mac_addr[i]) = (macaddr_h >> (8*j));
+    *(&the_e1000->mac_addr[i]) = (macaddr_h >> (8*j));
   for(int i=0,j=3;i<4;i++,j--)
-    *(&the_e1000.mac_addr[i+2]) = (macaddr_l >> (8*j));
-  char mac_str[18];
-  unpack_mac(the_e1000.mac_addr, mac_str);
-  mac_str[17] = 0;
-  cprintf("MAC string of e1000 device:%s\n", mac_str);
+    *(&the_e1000->mac_addr[i+2]) = (macaddr_l >> (8*j));
 
   //Transmit/Receive and DMA config beyond this point...
+  //sizeof(tbd)=128 bytes. so 32 of these will fit in a page of size 4KB
+  struct e1000_tbd *ttmp = (struct e1000_tbd*)kalloc();
+  for(int i=0;i<E1000_TBD_SLOTS;i++, ttmp++) {
+    the_e1000->tbd[i] = (struct e1000_tbd*)ttmp;
+  }
+  //check the last nibble of the transmit/receive rings to make sure they
+  //are on paragraph boundary
+  if( (V2P(the_e1000->tbd[0]) & 0x0000000f) != 0){
+    cprintf("ERROR:e1000:Transmit Descriptor Ring not on paragraph boundary\n");
+    kfree((char*)ttmp);
+    return -1;
+  }
+  //same for rbd
+  struct e1000_rbd *rtmp = (struct e1000_rbd*)kalloc();
+  for(int i=0;i<E1000_RBD_SLOTS;i++, rtmp++) {
+    the_e1000->rbd[i] = (struct e1000_rbd*)rtmp;
+  }
+  if( (V2P(the_e1000->rbd[0]) & 0x0000000f) != 0){
+    cprintf("ERROR:e1000:Receive Descriptor Ring not on paragraph boundary\n");
+    kfree((char*)rtmp);
+    return -1;
+  }
+
+  //Now for the packet buffers in Receive Ring. Can fit 2 packet buf in 1 page
+  struct packet_buf *tmp;
+  for(int i=0; i<E1000_RBD_SLOTS; i+=2) {
+    tmp = (struct packet_buf*)kalloc();
+    the_e1000->rx_buf[i] = tmp++;
+    the_e1000->rbd[i]->addr_l = (uint32_t)the_e1000->rx_buf[i];
+    the_e1000->rx_buf[i+1] = tmp;
+    the_e1000->rbd[i+1]->addr_l = (uint32_t)the_e1000->rx_buf[i+1];
+  }
+  for(int i=0; i<E1000_TBD_SLOTS; i+=2) {
+    tmp = (struct packet_buf*)kalloc();
+    the_e1000->tx_buf[i] = tmp++;
+    the_e1000->tbd[i]->addr_l = (uint32_t)the_e1000->tx_buf[i];
+    the_e1000->tx_buf[i+1] = tmp;
+    the_e1000->tbd[i+1]->addr_l = (uint32_t)the_e1000->tx_buf[i+1];
+  }
 
   //Register interrupt handler here...
 
