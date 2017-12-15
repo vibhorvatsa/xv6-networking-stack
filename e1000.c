@@ -226,7 +226,7 @@ void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
   struct e1000 *e1000 = (struct e1000*)driver;
   cprintf("e1000 driver: Sending packet of length:0x%x %x starting at physical address:0x%x\n", length, sizeof(struct ethr_hdr), V2P(e1000->tx_buf[e1000->tbd_tail]));
   memset(e1000->tbd[e1000->tbd_tail], 0, sizeof(struct e1000_tbd));
-  strncpy((char*)(e1000->tx_buf[e1000->tbd_tail]), (char*)pkt, length);
+  memmove((e1000->tx_buf[e1000->tbd_tail]), pkt, length);
   e1000->tbd[e1000->tbd_tail]->addr = (uint64_t)(uint32_t)V2P(e1000->tx_buf[e1000->tbd_tail]);
 	e1000->tbd[e1000->tbd_tail]->length = length;
 	e1000->tbd[e1000->tbd_tail]->cmd = (E1000_TDESC_CMD_RS | E1000_TDESC_CMD_EOP | E1000_TDESC_CMD_IFCS);
@@ -243,7 +243,7 @@ void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
   cprintf("after while loop\n");
 }
 
-int e1000_init(struct pci_func *pcif, void** driver) {
+int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
   struct e1000 *the_e1000 = (struct e1000*)kalloc();
 
 	for (int i = 0; i < 6; i++) {
@@ -289,14 +289,15 @@ int e1000_init(struct pci_func *pcif, void** driver) {
   //Read Hardware(MAC) address from the device
   uint32_t macaddr_l = e1000_reg_read(E1000_RCV_RAL0, the_e1000);
   uint32_t macaddr_h = e1000_reg_read(E1000_RCV_RAH0, the_e1000);
-  for(int i=0,j=1;i<2;i++,j--)
-    *(&the_e1000->mac_addr[i]) = (macaddr_h >> (8*j));
-  for(int i=0,j=3;i<4;i++,j--)
-    *(&the_e1000->mac_addr[i+2]) = (macaddr_l >> (8*j));
+  *(uint32_t*)the_e1000->mac_addr = macaddr_l;
+  *(uint16_t*)(&the_e1000->mac_addr[4]) = (uint16_t)macaddr_h;
+  *(uint32_t*)mac_addr = macaddr_l;
+  *(uint32_t*)(&mac_addr[4]) = (uint16_t)macaddr_h;
   char mac_str[18];
   unpack_mac(the_e1000->mac_addr, mac_str);
   mac_str[17] = 0;
-  cprintf("MAC address of the e1000 device:%s\n", mac_str);
+
+  cprintf("\nMAC address of the e1000 device:%s\n", mac_str);
   //Transmit/Receive and DMA config beyond this point...
   //sizeof(tbd)=128bits/16bytes. so 256 of these will fit in a page of size 4KB.
   //But the struct e1000 has to contain pointer to these many descriptors.

@@ -42,12 +42,12 @@ void pack_mac(uchar* dest, char* src) {
 	}
 }
 
-uint get_ip (char* ip, uint len) {
+uint32_t get_ip (char* ip, uint len) {
     uint ipv4  = 0;
     char arr[4];
     int n1 = 0;
 
-     int ip_vals[4];
+     uint ip_vals[4];
      int n2 = 0;
 
      for (int i =0; i<len; i++) {
@@ -61,24 +61,23 @@ uint get_ip (char* ip, uint len) {
         arr[n1++] = ch;
     }
 
-    ipv4 = (ip_vals[0]<<24) + (ip_vals[1]<<16) + (ip_vals[2]<<8) + ip_vals[3];
-
+    //ipv4 = (ip_vals[0]<<24) + (ip_vals[1]<<16) + (ip_vals[2]<<8) + ip_vals[3];
+ipv4 = (ip_vals[3]<<24) + (ip_vals[2]<<16) + (ip_vals[1]<<8) + ip_vals[0];
     return ipv4;
 }
 uint16_t htons(uint16_t v) {
   return (v >> 8) | (v << 8);
 }
+uint32_t htonl(uint32_t v) {
+  return htons(v >> 16) | (htons((uint16_t) v) << 16);
+}
 
-int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
+int create_eth_arp_frame(uint8_t* smac, char* ipAddr, struct ethr_hdr *eth) {
 	cprintf("Create ARP frame\n");
 	char* dmac = BROADCAST_MAC;
 
-	//TODO: retrieve MAC of the ethernet device
-	//hard code for now
-	char *smac = "28:b2:bd:50:7f:21";
-
 	pack_mac(eth->dmac, dmac);
-	pack_mac(eth->smac, smac);
+	memmove(eth->smac, smac, 6);
 
 	//ether type = 0x0806 for ARP
 	eth->ethr_type = htons(0x0806);
@@ -87,17 +86,17 @@ int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
 	eth->hwtype = htons(1);
 	eth->protype = htons(0x0800);
 
-	eth->hwsize = 6;
-	eth->prosize = 4;
+	eth->hwsize = 0x06;
+	eth->prosize = 0x04;
 
 	//arp request
-	eth->opcode = 1;
+	eth->opcode = htons(1);
 
 	/** ARP packet internal data filling **/
-	pack_mac(eth->arp_smac, smac);
+	memmove(eth->arp_smac, smac, 6);
 	pack_mac(eth->arp_dmac, dmac); //this can potentially be igored for the request
 
-	eth->sip = 0;
+	eth->sip = get_ip("192.168.1.1", strlen("192.168.1.1"));
 
 	eth->dip = get_ip(ipAddr, strlen(ipAddr));
 cprintf("15+ bytes of ethr_hdr:%d and sizeof(ethrtype)=%d\n", ((uint32_t)&eth->protype-(uint32_t)&eth->hwtype),sizeof(eth->hwtype));
@@ -120,7 +119,7 @@ char int_to_hex (uint n) {
 
 }
 // parse the mac address
-void unpack_mac(uchar* mac, char* mac_str) {
+void unpack_mac(uint8_t* mac, char* mac_str) {
 
     int c = 0;
 
@@ -128,7 +127,7 @@ void unpack_mac(uchar* mac, char* mac_str) {
         uint m = mac[i];
 
         uint i2 = m & 0x0f;
-        uint i1 = m & 0xf0;
+        uint i1 = (m & 0xf0)>>4;
 
         mac_str[c++] = int_to_hex(i1);
         mac_str[c++] = int_to_hex(i2);
