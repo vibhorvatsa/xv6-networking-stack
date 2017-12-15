@@ -56,7 +56,7 @@ uint32_t get_ip (char* ip, uint len) {
             arr[n1++] = '\0';
             n1 = 0;
             ip_vals[n2++] = atoi(arr);
-       	    //cprintf("Check ipval:%d , arr:%s",ip_vals[n2],arr); 
+       	    //cprintf("Check ipval:%d , arr:%s",ip_vals[n2],arr);
 	} else {
 
 		arr[n1++] = ch;
@@ -66,8 +66,8 @@ uint32_t get_ip (char* ip, uint len) {
         arr[n1++] = '\0';
         n1 = 0;
         ip_vals[n2++] = atoi(arr);
-        //cprintf("Final Check ipval:%d , arr:%s",ip_vals[n2],arr); 
-    
+        //cprintf("Final Check ipval:%d , arr:%s",ip_vals[n2],arr);
+
 //	ipv4 = (ip_vals[0]<<24) + (ip_vals[1]<<16) + (ip_vals[2]<<8) + ip_vals[3];
 	ipv4 = (ip_vals[3]<<24) + (ip_vals[2]<<16) + (ip_vals[1]<<8) + ip_vals[0];
     return ipv4;
@@ -105,7 +105,7 @@ int create_eth_arp_frame(uint8_t* smac, char* ipAddr, struct ethr_hdr *eth) {
 
 	eth->sip = get_ip("192.168.1.1", strlen("192.168.1.1"));
 
-	eth->dip = get_ip(ipAddr, strlen(ipAddr));
+	*(uint32_t*)(&eth->dip) = get_ip(ipAddr, strlen(ipAddr));
 
 	return 0;
 }

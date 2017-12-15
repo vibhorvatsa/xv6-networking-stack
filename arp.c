@@ -29,7 +29,7 @@ int send_arpRequest(char* interface, char* ipAddr, char* arpResp) {
 
   struct ethr_hdr eth;
   create_eth_arp_frame(nd->mac_addr, ipAddr, &eth);
-  nd->send_packet(nd->driver, (uint8_t*)&eth, sizeof(eth));
+  nd->send_packet(nd->driver, (uint8_t*)&eth, sizeof(eth)-2); //sizeof(eth)-2 to remove padding. padding was necessary for alignment.
 
   struct ethr_hdr arpResponse;
   if(block_until_arp_reply(&arpResponse) < 0) {
