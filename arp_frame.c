@@ -23,6 +23,9 @@ int hex_to_int (char ch) {
 	else if (ch >= 'A' && ch <= 'F') {
 		i = 10 + (ch - 'A');
 	}
+	else if (ch >= 'a' && ch <= 'f') {
+		i = 10 + (ch - 'a');
+	}
 
 	return i;
 }
@@ -62,7 +65,9 @@ uint get_ip (char* ip, uint len) {
 
     return ipv4;
 }
-
+uint16_t htons(uint16_t v) {
+  return (v >> 8) | (v << 8);
+}
 
 int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
 	cprintf("Create ARP frame\n");
@@ -76,8 +81,7 @@ int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
 	pack_mac(eth->smac, smac);
 
 	//ether type = 0x0806 for ARP
-	eth->ethr_type[0] = 8;
-	eth->ethr_type[1] = 6;
+	eth->ethr_type = htons(0x0806);
 
 	/** ARP packet filling **/
 	eth->arp.hwtype = 0x0001;
@@ -93,9 +97,9 @@ int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
 	pack_mac(eth->arp.arp_data.smac, smac);
 	pack_mac(eth->arp.arp_data.dmac, dmac); //this can potentially be igored for the request
 
-	eth->arp.arp_data.sip = get_ip(ipAddr, strlen(ipAddr));
+	eth->arp.arp_data.sip = 0;
 
-	eth->arp.arp_data.dip = 0;
+	eth->arp.arp_data.dip = get_ip(ipAddr, strlen(ipAddr));
 
 	return 0;
 }
@@ -179,10 +183,7 @@ void parse_ip (uint ip, char* ip_str) {
 
 // ethernet packet arrived; parse and get the MAC address
 void parse_arp_reply(struct ethr_hdr eth) {
-
-	int type = (eth.ethr_type[0]<<8) + (eth.ethr_type[1]);
-
-	if (type != 0x0806) {
+	if (eth.ethr_type != 0x0806) {
 		cprintf("Not an ARP packet");
 		return;
 	}

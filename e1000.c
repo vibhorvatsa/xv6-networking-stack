@@ -91,6 +91,7 @@
 * Ethernet Device Interrupt Mast Set registers
 */
 #define E1000_IMS                 0x000d0
+#define E1000_IMS_TXQE            0x00000002
 #define E1000_IMS_RXSEQ           0x00000008
 #define E1000_IMS_RXO             0x00000040
 #define E1000_IMS_RXT0            0x00000080
@@ -151,8 +152,7 @@
 // The Transmit Descriptor Queue must be aligned on 16-byte boundary
 __attribute__ ((packed))
 struct e1000_tbd {
-  uint32_t addr_l;
-  uint32_t addr_h;
+  uint64_t addr;
 	uint16_t length;
 	uint8_t cso;
 	uint8_t cmd;
@@ -224,10 +224,13 @@ static void udelay(unsigned int u)
 void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
 {
   struct e1000 *e1000 = (struct e1000*)driver;
+  cprintf("e1000 driver: Sending packet of length:0x%x %x starting at physical address:0x%x\n", length, sizeof(struct ethr_hdr), V2P(e1000->tx_buf[e1000->tbd_tail]));
+  memset(e1000->tbd[e1000->tbd_tail], 0, sizeof(struct e1000_tbd));
   strncpy((char*)(e1000->tx_buf[e1000->tbd_tail]), (char*)pkt, length);
+  e1000->tbd[e1000->tbd_tail]->addr = (uint64_t)(uint32_t)V2P(e1000->tx_buf[e1000->tbd_tail]);
 	e1000->tbd[e1000->tbd_tail]->length = length;
 	e1000->tbd[e1000->tbd_tail]->cmd = (E1000_TDESC_CMD_RS | E1000_TDESC_CMD_EOP | E1000_TDESC_CMD_IFCS);
-
+  e1000->tbd[e1000->tbd_tail]->cso = 0;
 	// update the tail so the hardware knows it's ready
 	int oldtail = e1000->tbd_tail;
 	e1000->tbd_tail = (e1000->tbd_tail + 1) % E1000_TBD_SLOTS;
@@ -290,7 +293,10 @@ int e1000_init(struct pci_func *pcif, void** driver) {
     *(&the_e1000->mac_addr[i]) = (macaddr_h >> (8*j));
   for(int i=0,j=3;i<4;i++,j--)
     *(&the_e1000->mac_addr[i+2]) = (macaddr_l >> (8*j));
-
+  char mac_str[18];
+  unpack_mac(the_e1000->mac_addr, mac_str);
+  mac_str[17] = 0;
+  cprintf("MAC address of the e1000 device:%s\n", mac_str);
   //Transmit/Receive and DMA config beyond this point...
   //sizeof(tbd)=128bits/16bytes. so 256 of these will fit in a page of size 4KB.
   //But the struct e1000 has to contain pointer to these many descriptors.
@@ -325,15 +331,19 @@ int e1000_init(struct pci_func *pcif, void** driver) {
     tmp = (struct packet_buf*)kalloc();
     the_e1000->rx_buf[i] = tmp++;
     the_e1000->rbd[i]->addr_l = (uint32_t)the_e1000->rx_buf[i];
+    the_e1000->rbd[i]->addr_h = 0;
     the_e1000->rx_buf[i+1] = tmp;
     the_e1000->rbd[i+1]->addr_l = (uint32_t)the_e1000->rx_buf[i+1];
+    the_e1000->rbd[i+1]->addr_h = 0;
   }
   for(int i=0; i<E1000_TBD_SLOTS; i+=2) {
     tmp = (struct packet_buf*)kalloc();
     the_e1000->tx_buf[i] = tmp++;
-    the_e1000->tbd[i]->addr_l = (uint32_t)the_e1000->tx_buf[i];
+    //the_e1000->tbd[i]->addr = (uint32_t)the_e1000->tx_buf[i];
+    //the_e1000->tbd[i]->addr_h = 0;
     the_e1000->tx_buf[i+1] = tmp;
-    the_e1000->tbd[i+1]->addr_l = (uint32_t)the_e1000->tx_buf[i+1];
+    //the_e1000->tbd[i+1]->addr_l = (uint32_t)the_e1000->tx_buf[i+1];
+    //the_e1000->tbd[i+1]->addr_h = 0;
   }
 
   //Write the Descriptor ring addresses in TDBAL, and RDBAL, plus HEAD and TAIL pointers
@@ -341,13 +351,13 @@ int e1000_init(struct pci_func *pcif, void** driver) {
   e1000_reg_write(E1000_TDBAH, 0x00000000, the_e1000);
   e1000_reg_write(E1000_TDLEN, (E1000_TBD_SLOTS*16) << 7, the_e1000);
   e1000_reg_write(E1000_TDH, 0x00000000, the_e1000);
-  e1000_reg_write(E1000_TDT, 0x00000000, the_e1000);
   e1000_reg_write(E1000_TCTL,
                   E1000_TCTL_EN |
                     E1000_TCTL_PSP |
                     E1000_TCTL_CT_SET(0x0f) |
                     E1000_TCTL_COLD_SET(0x200),
                   the_e1000);
+  e1000_reg_write(E1000_TDT, 0, the_e1000);
   e1000_reg_write(E1000_TIPG,
                   E1000_TIPG_IPGT_SET(10) |
                     E1000_TIPG_IPGR1_SET(10) |
@@ -358,8 +368,8 @@ int e1000_init(struct pci_func *pcif, void** driver) {
   e1000_reg_write(E1000_RDLEN, (E1000_RBD_SLOTS*16) << 7, the_e1000);
   e1000_reg_write(E1000_RDH, 0x00000000, the_e1000);
   e1000_reg_write(E1000_RDT, 0x00000000, the_e1000);
-  //enable receive interrupts
-  e1000_reg_write(E1000_IMS, E1000_IMS_RXSEQ | E1000_IMS_RXO | E1000_IMS_RXT0, the_e1000);
+  //enable interrupts
+  e1000_reg_write(E1000_IMS, E1000_IMS_RXSEQ | E1000_IMS_RXO | E1000_IMS_RXT0|E1000_IMS_TXQE, the_e1000);
   //Receive control Register.
   e1000_reg_write(E1000_RCTL,
                 E1000_RCTL_EN |
@@ -369,6 +379,9 @@ int e1000_init(struct pci_func *pcif, void** driver) {
                 the_e1000);
 
   //Register interrupt handler here...
+  ioapicenable(the_e1000->irq_line, 0);
+  ioapicenable(the_e1000->irq_line, 1);
+  picenable(the_e1000->irq_line);
 
   *driver = the_e1000;
   return 0;

@@ -4,28 +4,26 @@
  *edit1: Anmol Vatsa<anvatsa@cs.utah.edu>
  *take stuff from the c file and put it here for includes
  */
-
 struct arp_ipv4 {
-	uchar smac[6];
-	uint sip;
-	uchar dmac[6];
-	uint dip;
+	uint8_t smac[6];
+	uint32_t sip;
+	uint8_t dmac[6];
+	uint32_t dip;
 };
 
 struct arp_hdr {
-	uint hwtype;
-	uint protype;
-	char hwsize;
-	char prosize;
-	uint opcode;
+	uint16_t hwtype;
+	uint16_t protype;
+	uint8_t hwsize;
+	uint8_t prosize;
+	uint16_t opcode;
 	struct arp_ipv4 arp_data;
 };
 
-
 struct ethr_hdr {
-	uchar dmac[6];
-	uchar smac[6];
-	char ethr_type[2];
+	uint8_t dmac[6];
+	uint8_t smac[6];
+	uint16_t ethr_type;
 	struct arp_hdr arp;
 };
 
