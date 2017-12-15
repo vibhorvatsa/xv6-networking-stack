@@ -29,7 +29,6 @@ int send_arpRequest(char* interface, char* ipAddr, char* arpResp) {
 
   struct ethr_hdr eth;
   create_eth_arp_frame(nd->mac_addr, ipAddr, &eth);
-cprintf("12 eth %d\n",*((uint16_t*)((&eth))+8));
   nd->send_packet(nd->driver, (uint8_t*)&eth, sizeof(eth));
 
   struct ethr_hdr arpResponse;

@@ -5,6 +5,7 @@
 // I/O Addresses of the two programmable interrupt controllers
 #define IO_PIC1         0x20    // Master (IRQs 0-7)
 #define IO_PIC2         0xA0    // Slave (IRQs 8-15)
+
 #define IRQ_SLAVE       2       // IRQ at which slave connects to master
 
 // Current IRQ mask.
@@ -24,6 +25,7 @@ picenable(int irq)
 {
   picsetmask(irqmask & ~(1<<irq));
 }
+
 // Don't use the 8259A interrupt controllers.  Xv6 assumes SMP hardware.
 void
 picinit(void)
@@ -77,7 +79,6 @@ picinit(void)
 
  if(irqmask != 0xFFFF)
    picsetmask(irqmask);
-
 }
 
 //PAGEBREAK!

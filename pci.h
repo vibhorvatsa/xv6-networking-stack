@@ -43,6 +43,7 @@ struct pci_func {
     uint32_t reg_base[6];
     uint32_t reg_size[6];
     uint8_t irq_line;
+    uint8_t irq_pin;
 };
 
 // PCI driver container

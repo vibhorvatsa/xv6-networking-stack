@@ -53,6 +53,7 @@ void pci_enable_device(struct pci_func *f) {
 		       PCI_COMMAND_IO_ENABLE |
 		       PCI_COMMAND_MEM_ENABLE |
 		       PCI_COMMAND_MASTER_ENABLE);
+					 cprintf("pcicmd reg:0x%x\n", pci_conf_read(f, PCI_COMMAND_STATUS_REG));
 
 	uint32_t bar_width;
 	uint32_t bar;
@@ -172,6 +173,7 @@ static int pci_enumerate_bus(struct pci_bus *bus) {
       // read the interrupt line... assuming only one interrupt pin???
 			uint32_t intr = pci_conf_read(&af, PCI_INTERRUPT_REG);
 			af.irq_line = PCI_INTERRUPT_LINE(intr);
+			af.irq_pin = PCI_INTERRUPT_PIN(intr);
 
       //read the full device class_code + subclass + progIF + Revision_id
 			af.dev_class = pci_conf_read(&af, PCI_CLASS_REG);

@@ -196,6 +196,7 @@ struct e1000 {
   uint32_t iobase;
   uint32_t membase;
   uint8_t irq_line;
+  uint8_t irq_pin;
   uint8_t mac_addr[6];
 };
 
@@ -267,6 +268,8 @@ int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
       panic("Fail to find a valid Mem I/O base for E1000.");
 
 	the_e1000->irq_line = pcif->irq_line;
+  the_e1000->irq_pin = pcif->irq_pin;
+  cprintf("e1000 init: interrupt pin=%d and line:%d\n",the_e1000->irq_pin,the_e1000->irq_line);
   the_e1000->tbd_head = the_e1000->tbd_tail = 0;
   the_e1000->rbd_head = the_e1000->rbd_tail = 0;
 
@@ -331,10 +334,10 @@ int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
   for(int i=0; i<E1000_RBD_SLOTS; i+=2) {
     tmp = (struct packet_buf*)kalloc();
     the_e1000->rx_buf[i] = tmp++;
-    the_e1000->rbd[i]->addr_l = (uint32_t)the_e1000->rx_buf[i];
+    the_e1000->rbd[i]->addr_l = V2P((uint32_t)the_e1000->rx_buf[i]);
     the_e1000->rbd[i]->addr_h = 0;
     the_e1000->rx_buf[i+1] = tmp;
-    the_e1000->rbd[i+1]->addr_l = (uint32_t)the_e1000->rx_buf[i+1];
+    the_e1000->rbd[i+1]->addr_l = V2P((uint32_t)the_e1000->rx_buf[i+1]);
     the_e1000->rbd[i+1]->addr_h = 0;
   }
   for(int i=0; i<E1000_TBD_SLOTS; i+=2) {
@@ -375,19 +378,19 @@ int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
   e1000_reg_write(E1000_RCTL,
                 E1000_RCTL_EN |
                   E1000_RCTL_BAM |
-                  E1000_RCTL_BSIZE, //|
+                  E1000_RCTL_BSIZE | 0x00000008,//|
                 //  E1000_RCTL_SECRC,
                 the_e1000);
-
+cprintf("e1000:Interrupt enabled mask:0x%x\n", e1000_reg_read(E1000_IMS, the_e1000));
   //Register interrupt handler here...
+  picenable(the_e1000->irq_line);
   ioapicenable(the_e1000->irq_line, 0);
   ioapicenable(the_e1000->irq_line, 1);
-  picenable(the_e1000->irq_line);
+
 
   *driver = the_e1000;
   return 0;
 }
 
 void e1000_recv(void *driver, uint8_t* pkt, uint16_t length) {
-
 }
