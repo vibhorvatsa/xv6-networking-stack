@@ -84,23 +84,23 @@ int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth) {
 	eth->ethr_type = htons(0x0806);
 
 	/** ARP packet filling **/
-	eth->arp.hwtype = 0x0001;
-	eth->arp.protype = 0x0800;
+	eth->hwtype = htons(1);
+	eth->protype = htons(0x0800);
 
-	eth->arp.hwsize = 6;
-	eth->arp.prosize = 4;
+	eth->hwsize = 6;
+	eth->prosize = 4;
 
 	//arp request
-	eth->arp.opcode = 1;
+	eth->opcode = 1;
 
 	/** ARP packet internal data filling **/
-	pack_mac(eth->arp.arp_data.smac, smac);
-	pack_mac(eth->arp.arp_data.dmac, dmac); //this can potentially be igored for the request
+	pack_mac(eth->arp_smac, smac);
+	pack_mac(eth->arp_dmac, dmac); //this can potentially be igored for the request
 
-	eth->arp.arp_data.sip = 0;
+	eth->sip = 0;
 
-	eth->arp.arp_data.dip = get_ip(ipAddr, strlen(ipAddr));
-
+	eth->dip = get_ip(ipAddr, strlen(ipAddr));
+cprintf("15+ bytes of ethr_hdr:%d and sizeof(ethrtype)=%d\n", ((uint32_t)&eth->protype-(uint32_t)&eth->hwtype),sizeof(eth->hwtype));
 	return 0;
 }
 
@@ -188,12 +188,12 @@ void parse_arp_reply(struct ethr_hdr eth) {
 		return;
 	}
 
-	if (eth.arp.protype != 0x0800) {
+	if (eth.protype != 0x0800) {
 		cprintf("Not IPV4 protocol\n");
 		return;
 	}
 
-	if (eth.arp.opcode != 2) {
+	if (eth.opcode != 2) {
 		cprintf("Not an ARP reply\n");
 		return;
 	}
@@ -201,7 +201,7 @@ void parse_arp_reply(struct ethr_hdr eth) {
 	char* my_mac = (char*)"FF:FF:FF:FF:FF:FF";
 	char dst_mac[18];
 
-	unpack_mac(eth.arp.arp_data.dmac, dst_mac);
+	unpack_mac(eth.arp_dmac, dst_mac);
 
 	if (strcmp((const char*)my_mac, (const char*)dst_mac)) {
 		cprintf("Not the intended recipient\n");
@@ -212,7 +212,7 @@ void parse_arp_reply(struct ethr_hdr eth) {
 	char* my_ip = (char*)"255.255.255.255";
 	char dst_ip[16];
 
-	parse_ip(eth.arp.arp_data.dip, dst_ip);
+	parse_ip(eth.dip, dst_ip);
 
 	if (strcmp((const char*)my_ip, (const char*)dst_ip)) {
 	    cprintf("Not the intended recipient\n");
@@ -220,7 +220,7 @@ void parse_arp_reply(struct ethr_hdr eth) {
 	}
 
 	char mac[18];
-	unpack_mac(eth.arp.arp_data.smac, mac);
+	unpack_mac(eth.arp_smac, mac);
 
 	cprintf((char*)mac);
 }

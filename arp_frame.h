@@ -4,27 +4,20 @@
  *edit1: Anmol Vatsa<anvatsa@cs.utah.edu>
  *take stuff from the c file and put it here for includes
  */
-struct arp_ipv4 {
-	uint8_t smac[6];
-	uint32_t sip;
-	uint8_t dmac[6];
-	uint32_t dip;
-};
-
-struct arp_hdr {
-	uint16_t hwtype;
-	uint16_t protype;
-	uint8_t hwsize;
-	uint8_t prosize;
-	uint16_t opcode;
-	struct arp_ipv4 arp_data;
-};
 
 struct ethr_hdr {
 	uint8_t dmac[6];
 	uint8_t smac[6];
 	uint16_t ethr_type;
-	struct arp_hdr arp;
+	uint16_t hwtype;
+	uint16_t protype;
+	uint8_t hwsize;
+	uint8_t prosize;
+	uint16_t opcode;
+	uint8_t arp_smac[6];
+	uint32_t sip;
+	uint8_t arp_dmac[6];
+	uint32_t dip;
 };
 
 int create_eth_arp_frame(char* ipAddr, struct ethr_hdr *eth);

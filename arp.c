@@ -20,7 +20,7 @@ static int block_until_arp_reply(struct ethr_hdr *arpReply) {
 
 int send_arpRequest(char* interface, char* ipAddr, char* arpResp) {
   cprintf("Create arp request for ip:%s over Interface:%s\n", ipAddr, interface);
-  
+
   struct nic_device *nd;
   if(get_device(interface, &nd) < 0) {
     cprintf("ERROR:send_arpRequest:Device not loaded\n");
@@ -29,7 +29,7 @@ int send_arpRequest(char* interface, char* ipAddr, char* arpResp) {
 
   struct ethr_hdr eth;
   create_eth_arp_frame(ipAddr, &eth);
-
+cprintf("12 eth %d\n",*((uint16_t*)((&eth))+8));
   nd->send_packet(nd->driver, (uint8_t*)&eth, sizeof(eth));
 
   struct ethr_hdr arpResponse;
@@ -38,7 +38,7 @@ int send_arpRequest(char* interface, char* ipAddr, char* arpResp) {
     return -3;
   }
 
-  unpack_mac(arpResponse.arp.arp_data.dmac, arpResp);
+  unpack_mac(arpResponse.arp_dmac, arpResp);
   arpResp[17] = '\0';
 
   return 0;
