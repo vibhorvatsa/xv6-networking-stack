@@ -15,8 +15,8 @@
 #include "nic.h"
 #include "memlayout.h"
 
-#define E1000_RBD_SLOTS			32
-#define E1000_TBD_SLOTS			32
+#define E1000_RBD_SLOTS			128
+#define E1000_TBD_SLOTS			128
 
 //Bit 31:20 are not writable. Always read 0b.
 #define E1000_IOADDR_OFFSET 0x00000000
@@ -38,12 +38,88 @@
         (cntrl & E1000_CNTRL_RST_MASK)
 
 /**
- * Ethernet Device Receive registers
+ * Ethernet Device registers
  */
- #define E1000_RCV_RAL0     0x05400
- #define E1000_RCV_RAH0     0x05404
+#define E1000_RCV_RAL0      0x05400
+#define E1000_RCV_RAH0      0x05404
+#define E1000_TDBAL         0x03800
+#define E1000_TDBAH         0x03804
+#define E1000_TDLEN         0x03808
+#define E1000_TDH           0x03810
+#define E1000_TDT           0x03818
+#define E1000_RDBAL         0x02800
+#define E1000_RDBAH         0x02804
+#define E1000_RDLEN         0x02808
+#define E1000_RDH           0x02810
+#define E1000_RDT           0x02818
 
- /**
+/**
+ * Ethernet Device Transmission Control register
+ */
+#define E1000_TCTL                0x00400
+
+#define E1000_TCTL_EN             0x00000002
+#define E1000_TCTL_PSP            0x00000008
+#define E1000_TCTL_CT_BIT_MASK    0x00000ff0
+#define E1000_TCTL_CT_BIT_SHIFT   4
+#define E1000_TCTL_CT_SET(value) \
+        ((value << E1000_TCTL_CT_BIT_SHIFT) & E1000_TCTL_CT_BIT_MASK)
+#define E1000_TCTL_COLD_BIT_MASK  0x003ff000
+#define E1000_TCTL_COLD_BIT_SHIFT 12
+#define E1000_TCTL_COLD_SET(value) \
+        ((value << E1000_TCTL_COLD_BIT_SHIFT) & E1000_TCTL_COLD_BIT_MASK)
+
+/**
+ * Ethernet Device Transmission Inter-Packet Gap register
+ */
+#define E1000_TIPG                0x00410
+
+#define E1000_TIPG_IPGT_BIT_MASK    0x000003ff
+#define E1000_TIPG_IPGT_BIT_SHIFT   0
+#define E1000_TIPG_IPGT_SET(value) \
+        ((value << E1000_TIPG_IPGT_BIT_SHIFT) & E1000_TIPG_IPGT_BIT_MASK)
+#define E1000_TIPG_IPGR1_BIT_MASK   0x000ffc00
+#define E1000_TIPG_IPGR1_BIT_SHIFT   10
+#define E1000_TIPG_IPGR1_SET(value) \
+        ((value << E1000_TIPG_IPGR1_BIT_SHIFT) & E1000_TIPG_IPGR1_BIT_MASK)
+#define E1000_TIPG_IPGR2_BIT_MASK   0x3ff00000
+#define E1000_TIPG_IPGR2_BIT_SHIFT   20
+#define E1000_TIPG_IPGR2_SET(value) \
+        ((value << E1000_TIPG_IPGR2_BIT_SHIFT) & E1000_TIPG_IPGR2_BIT_MASK)
+
+/**
+* Ethernet Device Interrupt Mast Set registers
+*/
+#define E1000_IMS                 0x000d0
+#define E1000_IMS_RXSEQ           0x00000008
+#define E1000_IMS_RXO             0x00000040
+#define E1000_IMS_RXT0            0x00000080
+
+/**
+ * Ethernet Device Receive Control register
+ */
+#define E1000_RCTL                0x00100
+
+#define E1000_RCTL_EN             0x00000002
+#define E1000_RCTL_BAM            0x00008000
+#define E1000_RCTL_BSIZE          0x00000000
+#define E1000_RCTL_SECRC          0x04000000
+
+/**
+ * Ethernet Device Transmit Descriptor Command Field
+ */
+#define E1000_TDESC_CMD_RS      0x08
+#define E1000_TDESC_CMD_EOP     0x01
+#define E1000_TDESC_CMD_IFCS    0x02
+
+/**
+ * Ethernet Device Transmit Descriptor Status Field
+ */
+#define E1000_TDESC_STATUS_DONE_MASK   0x01
+#define E1000_TDESC_STATUS_DONE(status) \
+        (status & E1000_TDESC_STATUS_DONE_MASK)
+
+/**
   * Ethernet Device EEPROM registers
   */
 #define E1000_EERD_REG_ADDR         0x00014
@@ -73,7 +149,7 @@
 
 //Trasmit Buffer Descriptor
 // The Transmit Descriptor Queue must be aligned on 16-byte boundary
-//__attribute__ ((aligned (16)))
+__attribute__ ((packed))
 struct e1000_tbd {
   uint32_t addr_l;
   uint32_t addr_h;
@@ -87,7 +163,7 @@ struct e1000_tbd {
 
 //Receive Buffer Descriptor
 // The Receive Descriptor Queue must be aligned on 16-byte boundary
-//__attribute__ ((aligned (16)))
+__attribute__ ((packed))
 struct e1000_rbd {
   uint32_t addr_l;
   uint32_t addr_h;
@@ -145,7 +221,26 @@ static void udelay(unsigned int u)
 		inb(0x84);
 }
 
-int e1000_init(struct pci_func *pcif) {
+void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
+{
+  struct e1000 *e1000 = (struct e1000*)driver;
+  strncpy((char*)(e1000->tx_buf[e1000->tbd_tail]), (char*)pkt, length);
+	e1000->tbd[e1000->tbd_tail]->length = length;
+	e1000->tbd[e1000->tbd_tail]->cmd = (E1000_TDESC_CMD_RS | E1000_TDESC_CMD_EOP | E1000_TDESC_CMD_IFCS);
+
+	// update the tail so the hardware knows it's ready
+	int oldtail = e1000->tbd_tail;
+	e1000->tbd_tail = (e1000->tbd_tail + 1) % E1000_TBD_SLOTS;
+	e1000_reg_write(E1000_TDT, e1000->tbd_tail, e1000);
+
+	while( !E1000_TDESC_STATUS_DONE(e1000->tbd[oldtail]->status) )
+	{
+		udelay(2);
+	}
+  cprintf("after while loop\n");
+}
+
+int e1000_init(struct pci_func *pcif, void** driver) {
   struct e1000 *the_e1000 = (struct e1000*)kalloc();
 
 	for (int i = 0; i < 6; i++) {
@@ -169,6 +264,8 @@ int e1000_init(struct pci_func *pcif) {
       panic("Fail to find a valid Mem I/O base for E1000.");
 
 	the_e1000->irq_line = pcif->irq_line;
+  the_e1000->tbd_head = the_e1000->tbd_tail = 0;
+  the_e1000->rbd_head = the_e1000->rbd_tail = 0;
 
   // Reset device but keep the PCI config
   e1000_reg_write(E1000_CNTRL_REG,
@@ -195,7 +292,11 @@ int e1000_init(struct pci_func *pcif) {
     *(&the_e1000->mac_addr[i+2]) = (macaddr_l >> (8*j));
 
   //Transmit/Receive and DMA config beyond this point...
-  //sizeof(tbd)=128 bytes. so 32 of these will fit in a page of size 4KB
+  //sizeof(tbd)=128bits/16bytes. so 256 of these will fit in a page of size 4KB.
+  //But the struct e1000 has to contain pointer to these many descriptors.
+  //Each pointer being 4 bytes, and 4 such array of pointers(inclusing packet buffers)
+  //you get N*16+(some more values in the struct e1000) = 4096
+  // N=128=E1000_TBD_SLOTS. i.e., the maximum number of descriptors in one ring
   struct e1000_tbd *ttmp = (struct e1000_tbd*)kalloc();
   for(int i=0;i<E1000_TBD_SLOTS;i++, ttmp++) {
     the_e1000->tbd[i] = (struct e1000_tbd*)ttmp;
@@ -235,15 +336,44 @@ int e1000_init(struct pci_func *pcif) {
     the_e1000->tbd[i+1]->addr_l = (uint32_t)the_e1000->tx_buf[i+1];
   }
 
+  //Write the Descriptor ring addresses in TDBAL, and RDBAL, plus HEAD and TAIL pointers
+  e1000_reg_write(E1000_TDBAL, V2P(the_e1000->tbd[0]), the_e1000);
+  e1000_reg_write(E1000_TDBAH, 0x00000000, the_e1000);
+  e1000_reg_write(E1000_TDLEN, (E1000_TBD_SLOTS*16) << 7, the_e1000);
+  e1000_reg_write(E1000_TDH, 0x00000000, the_e1000);
+  e1000_reg_write(E1000_TDT, 0x00000000, the_e1000);
+  e1000_reg_write(E1000_TCTL,
+                  E1000_TCTL_EN |
+                    E1000_TCTL_PSP |
+                    E1000_TCTL_CT_SET(0x0f) |
+                    E1000_TCTL_COLD_SET(0x200),
+                  the_e1000);
+  e1000_reg_write(E1000_TIPG,
+                  E1000_TIPG_IPGT_SET(10) |
+                    E1000_TIPG_IPGR1_SET(10) |
+                    E1000_TIPG_IPGR2_SET(10),
+                  the_e1000);
+  e1000_reg_write(E1000_RDBAL, V2P(the_e1000->rbd[0]), the_e1000);
+  e1000_reg_write(E1000_RDBAH, 0x00000000, the_e1000);
+  e1000_reg_write(E1000_RDLEN, (E1000_RBD_SLOTS*16) << 7, the_e1000);
+  e1000_reg_write(E1000_RDH, 0x00000000, the_e1000);
+  e1000_reg_write(E1000_RDT, 0x00000000, the_e1000);
+  //enable receive interrupts
+  e1000_reg_write(E1000_IMS, E1000_IMS_RXSEQ | E1000_IMS_RXO | E1000_IMS_RXT0, the_e1000);
+  //Receive control Register.
+  e1000_reg_write(E1000_RCTL,
+                E1000_RCTL_EN |
+                  E1000_RCTL_BAM |
+                  E1000_RCTL_BSIZE, //|
+                //  E1000_RCTL_SECRC,
+                the_e1000);
+
   //Register interrupt handler here...
 
+  *driver = the_e1000;
   return 0;
 }
 
-int e1000_send(struct ethr_hdr eth) {
-  return 0;
-}
+void e1000_recv(void *driver, uint8_t* pkt, uint16_t length) {
 
-int e1000_recv(struct ethr_hdr eth) {
-  return 0;
 }

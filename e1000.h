@@ -10,17 +10,11 @@
 #include "nic.h"
 #include "pci.h"
 
-struct send_descriptor {
+struct e1000;
 
-};
+int e1000_init(struct pci_func *pcif, void **driver);
 
-struct recv_descriptor {
-
-};
-
-int e1000_init(struct pci_func *pcif);
-
-int e1000_send(struct ethr_hdr);
-int e1000_recv(struct ethr_hdr);
+void e1000_send(void *e1000, uint8_t* pkt, uint16_t length);
+void e1000_recv(void *e1000, uint8_t* pkt, uint16_t length);
 
 #endif

@@ -11,9 +11,9 @@
 
 //Generic NIC device driver container
 struct nic_device {
-  
-  int (*send_packet) (struct ethr_hdr packet);
-  int (*recv_packet) (struct ethr_hdr packet);
+  void *driver;
+  void (*send_packet) (void *driver, uint8_t* pkt, uint16_t length);
+  void (*recv_packet) (void *driver, uint8_t* pkt, uint16_t length);
 };
 
 //Holds the instances of nic_devices for loaded devices
