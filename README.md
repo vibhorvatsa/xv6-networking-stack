@@ -14,7 +14,7 @@ Networking is an important part of any OS implementation and our idea was to aug
 ## Final Status
 
 - We were able to intialise and register the driver and all its resources.
-- We were able to create ARP Packets and have written for parsing it as well. So, our Network stack till Arp Frame is comlpeted.
+- We were able to create ARP Packets and have written the code for parsing it at the receiving end as well. So, our Network stack till Arp Frame is comlpeted.
 - We were able to capture the packets sent from our driver on our Linux Host through wireshark. 
 - Uploaded an image showing one executable demo: DEMO.png, which involves:
 	- Creation of two QEMU instances with each of them having their own Driver (through tap interfaces: tap0 and tap1)
