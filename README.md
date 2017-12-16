@@ -11,6 +11,18 @@ Networking is an important part of any OS implementation and our idea was to aug
 	- **ARP Protocol:** Create and parse ARP packets.
 - **ARP system call and client:** Expose the create_arp() call as a system call to test ARP through a user space client application.
 
+## Final Status
+
+- We were able to intialise and register the driver and all its resources.
+- We were able to create ARP Packets and have written for parsing it as well. So, our Network stack till Arp Frame is comlpeted.
+- We were able to capture the packets sent from our driver on our Linux Host through wireshark. 
+- Uploaded an image showing one executable demo: DEMO.png, which involves:
+	- Creation of two QEMU instances with each of them having their own Driver (through tap interfaces: tap0 and tap1)
+	- Created a linux Bridge on our Host linux machines to bridge the two tap devices.
+	- We showcase, ARP packet was succesfully generated and received.
+- **Incomplete Part:** For some reason, interrupts are not being triggered by the xv6 system after receiving a new packet.
+
+
 # Team Members:
 - Pradeep Kumar Beri (u1077774)
 - Anmol Vatsa (u1082186)
