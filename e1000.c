@@ -247,7 +247,7 @@ void e1000_send(void *driver, uint8_t *pkt, uint16_t length )
 int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
   struct e1000 *the_e1000 = (struct e1000*)kalloc();
 
-	for (int i = 0; i < 6; i++) {
+  for (int i = 0; i < 6; i++) {
     // I/O port numbers are 16 bits, so they should be between 0 and 0xffff.
     if (pcif->reg_base[i] <= 0xffff) {
       the_e1000->iobase = pcif->reg_base[i];
@@ -264,8 +264,8 @@ int e1000_init(struct pci_func *pcif, void** driver, uint8_t *mac_addr) {
   }
   if (!the_e1000->iobase)
     panic("Fail to find a valid I/O port base for E1000.");
-    if (!the_e1000->membase)
-      panic("Fail to find a valid Mem I/O base for E1000.");
+  if (!the_e1000->membase)
+    panic("Fail to find a valid Mem I/O base for E1000.");
 
 	the_e1000->irq_line = pcif->irq_line;
   the_e1000->irq_pin = pcif->irq_pin;
